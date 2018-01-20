@@ -1,21 +1,21 @@
 
-var express = require('express');
-
-var app = express();
-
-var server = app.listen(3000);
+let express = require('express');
+let socket = require('socket.io');
+let app = express();
 
 app.use(express.static('public'));
+let server = app.listen(3000);
 
-var socket = require('socket.io');
-
-var io = socket(server);
+let io = socket(server);
 
 io.sockets.on('connection', socket => {
     console.log('new conncetion:' + socket.id);
     socket.on('draw', data => {
         console.log(data);
-        socket.broadcast.emit('draw', data);
+        socket.broadcast.emit('drawPub', data);
+    });
+    socket.on('trunOffPaintMode', () => {
+        socket.broadcast.emit('trunOffPaintMode');
     });
 
 });

@@ -1,36 +1,56 @@
 
-var socket = io.connect('http://localhost:3000');
+function setGlobalVariable() {
+    socket = io.connect('http://localhost:3000');
+    mode = false;
+    canvas = document.getElementById('painter');
+}
 
 window.onload = () => {
-    setup();
+    setGlobalVariable();
+    init();
+};
+
+function init() {
+    initCanvasListeners();
+    initSocketListeners();
+    initBodyListeners();
+    setupCanvas(canvas.getContext('2d'));
 }
 
-function setup() {
-    let mode = false;
-    let canvas = document.getElementById('painter');
-    var ctx = canvas.getContext('2d');
-
-    canvas.addEventListener('mousedown', () => {
+function initCanvasListeners() {
+    var events = ['mousedown', 'mousemove', 'mouseup', 'mouseout'];
+    events.forEach((event) => {
+        canvas.addEventListener(event, (e) => {
+            let mouseCords = getMouseCords(e);
+            draw(canvas.getContext('2d'), e.type, mouseCords, true);
+        }, event === 'mouseup' | event === 'mouseout' ? true : false);
+    });
+}
+function initSocketListeners() {
+    socket.on('drawPub', data => {
+        canvas.getContext('2d').strokeStyle = data.color;
         mode = true;
+        draw(canvas.getContext('2d'), data.event, data.cords, false);
     });
-    canvas.addEventListener('mouseup', () => {
+    socket.on('trunOffPaintMode', () => {
         mode = false;
-        canvas.style.cursor = 'default';
     });
-    canvas.addEventListener('mousemove', (e) => {
-        var cordinates = getMouseCords(canvas, e);
-        canvas.style.cursor = 'pointer';
-        draw(ctx, cordinates.x, cordinates.y, mode);
+}
+function initBodyListeners() {
+    document.getElementsByTagName('body')[0].addEventListener('mouseout', () => {
+        socket.emit('trunOffPaintMode',true);
     });
-
-    socket.on('draw', data => {
-        canvas.style.cursor = 'pointer';
-        draw(ctx, data.x, data.y, true);
-    });
-
 }
 
-function getMouseCords(canvas, event) {
+function setupCanvas(ctx) {
+    ctx = canvas.getContext('2d');
+    ctx.fillStyle = "solid";
+    ctx.strokeStyle = "#bada55";
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+}
+
+function getMouseCords(event) {
     var boundingRect = canvas.getBoundingClientRect();
     return {
         x: event.clientX - boundingRect.left,
@@ -38,10 +58,28 @@ function getMouseCords(canvas, event) {
     }
 }
 
-function draw(ctx, x, y, mode) {
-    if (mode) {
-        ctx.fillStyle = '#FF0000';
-        ctx.fillRect(x, y, 4, 4);
-        socket.emit('draw', { x: x, y: y, color: '#FF0000' });
+function draw(ctx, eventType, cords, publishDraw) {
+    switch (eventType) {
+        case 'mousedown':
+            mode = true;
+            ctx.beginPath();
+            ctx.moveTo(cords.x, cords.y);
+            if (publishDraw)
+                socket.emit('draw', { cords: { x: cords.x, y: cords.y }, color: ctx.strokeStyle, event: 'mousedown' });
+            break;
+        case 'mousemove':
+            if (mode) {
+                console.log(mode);
+                ctx.lineTo(cords.x, cords.y);
+                ctx.stroke();
+                if (publishDraw)
+                    socket.emit('draw', { cords: { x: cords.x, y: cords.y }, color: ctx.strokeStyle, event: 'mousemove' });
+            }
+            break;
+        default:
+            mode = false;
+            console.log(mode);
+            ctx.closePath();
+            break;
     }
 }
